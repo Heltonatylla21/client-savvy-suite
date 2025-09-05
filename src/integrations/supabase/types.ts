@@ -14,7 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clientes: {
+        Row: {
+          cpf: string
+          created_at: string
+          data_nascimento: string
+          id: string
+          idade: number
+          nome: string
+          telefone1: string
+          telefone2: string | null
+          updated_at: string
+          wizebot: string | null
+        }
+        Insert: {
+          cpf: string
+          created_at?: string
+          data_nascimento: string
+          id?: string
+          idade: number
+          nome: string
+          telefone1: string
+          telefone2?: string | null
+          updated_at?: string
+          wizebot?: string | null
+        }
+        Update: {
+          cpf?: string
+          created_at?: string
+          data_nascimento?: string
+          id?: string
+          idade?: number
+          nome?: string
+          telefone1?: string
+          telefone2?: string | null
+          updated_at?: string
+          wizebot?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

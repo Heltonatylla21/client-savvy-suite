@@ -1,46 +1,60 @@
-import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CadastroCliente from "@/components/CadastroCliente";
 import ConsultaClientes from "@/components/ConsultaClientes";
 import Aniversariantes from "@/components/Aniversariantes";
-import { Users, Search, Calendar } from "lucide-react";
+import Dashboard from "@/components/Dashboard";
+import { UserPlus, Search, Calendar, BarChart3 } from "lucide-react";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background p-4">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Sistema de Consulta de Clientes</h1>
-        <p className="text-muted-foreground">Gerencie seus clientes de forma simples e eficiente</p>
-      </header>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
+            Sistema de Consultas
+          </h1>
+          <p className="text-muted-foreground">
+            Gerencie seus clientes de forma eficiente
+          </p>
+        </div>
 
-      <Tabs defaultValue="cadastro" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="cadastro" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            Cadastro
-          </TabsTrigger>
-          <TabsTrigger value="consulta" className="flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            Consulta
-          </TabsTrigger>
-          <TabsTrigger value="aniversariantes" className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            Aniversariantes
-          </TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="cadastro" className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Cadastro
+            </TabsTrigger>
+            <TabsTrigger value="consulta" className="flex items-center gap-2">
+              <Search className="w-4 h-4" />
+              Consulta
+            </TabsTrigger>
+            <TabsTrigger value="aniversariantes" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Aniversariantes
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="cadastro" className="mt-6">
-          <CadastroCliente />
-        </TabsContent>
+          <TabsContent value="dashboard" className="space-y-6">
+            <Dashboard />
+          </TabsContent>
 
-        <TabsContent value="consulta" className="mt-6">
-          <ConsultaClientes />
-        </TabsContent>
+          <TabsContent value="cadastro" className="space-y-6">
+            <CadastroCliente />
+          </TabsContent>
 
-        <TabsContent value="aniversariantes" className="mt-6">
-          <Aniversariantes />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="consulta" className="space-y-6">
+            <ConsultaClientes />
+          </TabsContent>
+
+          <TabsContent value="aniversariantes" className="space-y-6">
+            <Aniversariantes />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

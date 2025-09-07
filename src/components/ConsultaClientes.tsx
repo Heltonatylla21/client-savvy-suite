@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPF, formatPhone } from "@/lib/validators";
-import { Search, User, Phone, Calendar } from "lucide-react";
+import { Search, User, Phone, Calendar, Users } from "lucide-react";
 
 interface Cliente {
   id: string;
@@ -25,7 +25,7 @@ const ConsultaClientes = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState<"telefone" | "cpf">("telefone");
+  const [searchType, setSearchType] = useState<"telefone" | "cpf" | "lote">("telefone");
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const handleSearch = async () => {
@@ -46,6 +46,24 @@ const ConsultaClientes = () => {
       
       if (searchType === "cpf") {
         query = query.eq('cpf', cleanSearchTerm);
+      } else if (searchType === "lote") {
+        // Split CPFs by line break or comma and clean them
+        const cpfList = searchTerm
+          .split(/[\n,]/)
+          .map(cpf => cpf.replace(/\D/g, '').trim())
+          .filter(cpf => cpf.length === 11);
+        
+        if (cpfList.length === 0) {
+          toast({
+            title: "CPFs inválidos",
+            description: "Digite CPFs válidos separados por linha ou vírgula.",
+            variant: "destructive"
+          });
+          setLoading(false);
+          return;
+        }
+        
+        query = query.in('cpf', cpfList);
       } else {
         // Enhanced phone search: search with and without DDD
         const phonePatterns = [cleanSearchTerm];
@@ -126,24 +144,44 @@ const ConsultaClientes = () => {
                 <User className="w-4 h-4 mr-2" />
                 CPF
               </Button>
+              <Button
+                variant={searchType === "lote" ? "default" : "outline"}
+                onClick={() => setSearchType("lote")}
+                size="sm"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Lote CPFs
+              </Button>
             </div>
             
             <div>
               <Label htmlFor="search">
-                {searchType === "telefone" ? "Pesquisar por Telefone" : "Pesquisar por CPF"}
+                {searchType === "telefone" ? "Pesquisar por Telefone" : 
+                 searchType === "cpf" ? "Pesquisar por CPF" : "Pesquisar por Lote de CPFs"}
               </Label>
               <div className="flex gap-2 mt-1">
-                <Input
-                  id="search"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={
-                    searchType === "telefone" 
-                      ? "Digite o telefone (com ou sem DDD)" 
-                      : "Digite o CPF"
-                  }
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
+                {searchType === "lote" ? (
+                  <textarea
+                    id="search"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Digite os CPFs separados por linha ou vírgula&#10;Ex:&#10;123.456.789-00&#10;987.654.321-00&#10;ou&#10;12345678900, 98765432100"
+                    className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                    rows={4}
+                  />
+                ) : (
+                  <Input
+                    id="search"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={
+                      searchType === "telefone" 
+                        ? "Digite o telefone (com ou sem DDD)" 
+                        : "Digite o CPF"
+                    }
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                )}
                 <Button onClick={handleSearch} disabled={loading}>
                   {loading ? "Buscando..." : "Buscar"}
                 </Button>

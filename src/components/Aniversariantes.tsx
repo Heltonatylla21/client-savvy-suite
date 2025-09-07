@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPF, formatPhone } from "@/lib/validators";
-import { Calendar, Gift } from "lucide-react";
+import { Calendar, Gift, Download } from "lucide-react";
+import * as XLSX from 'xlsx';
 
 interface Cliente {
   id: string;
@@ -102,6 +103,39 @@ const Aniversariantes = () => {
     }
   };
 
+  const exportToExcel = () => {
+    if (aniversariantes.length === 0) {
+      toast({
+        title: "Nenhum dado para exportar",
+        description: "Faça uma busca primeiro para exportar os aniversariantes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const exportData = aniversariantes.map(cliente => ({
+      Nome: cliente.nome,
+      CPF: formatCPF(cliente.cpf),
+      Idade: cliente.idade,
+      'Data de Nascimento': formatDate(cliente.data_nascimento),
+      'Telefone 1': formatPhone(cliente.telefone1),
+      'Telefone 2': cliente.telefone2 ? formatPhone(cliente.telefone2) : '',
+      Wizebot: cliente.wizebot || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    const monthName = months.find(m => m.value === selectedMonth)?.label || '';
+    XLSX.utils.book_append_sheet(wb, ws, `Aniversariantes_${monthName}`);
+    
+    XLSX.writeFile(wb, `aniversariantes_${monthName.toLowerCase()}_${new Date().getFullYear()}.xlsx`);
+    
+    toast({
+      title: "Exportação concluída",
+      description: `${aniversariantes.length} aniversariantes exportados com sucesso.`
+    });
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
@@ -146,12 +180,18 @@ const Aniversariantes = () => {
       {aniversariantes.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gift className="w-5 h-5" />
-              {aniversariantes.length} aniversariante(s) encontrado(s)
-              <Badge variant="secondary">
-                {months.find(m => m.value === selectedMonth)?.label}
-              </Badge>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Gift className="w-5 h-5" />
+                {aniversariantes.length} aniversariante(s) encontrado(s)
+                <Badge variant="secondary">
+                  {months.find(m => m.value === selectedMonth)?.label}
+                </Badge>
+              </div>
+              <Button onClick={exportToExcel} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Exportar Excel
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>

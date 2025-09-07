@@ -63,19 +63,24 @@ const Aniversariantes = () => {
     setLoading(true);
     
     try {
+      // Use SQL function to extract month from date instead of creating invalid date ranges
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
-        .filter('data_nascimento', 'gte', `2000-${monthToSearch.padStart(2, '0')}-01`)
-        .filter('data_nascimento', 'lt', `2000-${(parseInt(monthToSearch) + 1).toString().padStart(2, '0')}-01`)
+        .filter('data_nascimento', 'not.is', null)
         .order('data_nascimento', { ascending: true });
 
       if (error) throw error;
 
-      // Filter by month using JavaScript to handle different years
+      // Filter by month using JavaScript to handle different years safely
       const filtered = (data || []).filter(cliente => {
-        const birthMonth = new Date(cliente.data_nascimento).getMonth() + 1;
-        return birthMonth === parseInt(monthToSearch);
+        try {
+          const birthDate = new Date(cliente.data_nascimento);
+          const birthMonth = birthDate.getMonth() + 1;
+          return birthMonth === parseInt(monthToSearch) && !isNaN(birthDate.getTime());
+        } catch {
+          return false;
+        }
       });
 
       setAniversariantes(filtered);

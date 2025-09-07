@@ -47,8 +47,28 @@ const ConsultaClientes = () => {
       if (searchType === "cpf") {
         query = query.eq('cpf', cleanSearchTerm);
       } else {
-        // Search for phone in both telefone1 and telefone2 columns
-        query = query.or(`telefone1.eq.${cleanSearchTerm},telefone2.eq.${cleanSearchTerm}`);
+        // Enhanced phone search: search with and without DDD
+        const phonePatterns = [cleanSearchTerm];
+        
+        // If has more than 9 digits, also search without the first 2 (DDD)
+        if (cleanSearchTerm.length > 9) {
+          phonePatterns.push(cleanSearchTerm.substring(2));
+        }
+        
+        // If has 9 digits or less, also search with common DDDs
+        if (cleanSearchTerm.length <= 9) {
+          const commonDDDs = ['11', '21', '31', '41', '51', '61', '71', '81', '85'];
+          commonDDDs.forEach(ddd => {
+            phonePatterns.push(ddd + cleanSearchTerm);
+          });
+        }
+        
+        // Create OR conditions for all phone patterns
+        const phoneConditions = phonePatterns.map(pattern => 
+          `telefone1.eq.${pattern},telefone2.eq.${pattern}`
+        ).join(',');
+        
+        query = query.or(phoneConditions);
       }
 
       const { data, error } = await query;

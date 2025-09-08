@@ -38,7 +38,7 @@ export default function CadastroLote() {
         idade: 30,
         telefone1: '11999999999',
         telefone2: '1133333333',
-        data_nascimento: '1994-01-15',
+        data_nascimento: '15/01/1994',
         wizebot: 'joao123'
       }
     ];
@@ -95,8 +95,9 @@ export default function CadastroLote() {
           }
 
           // Validar CPF
-          const cpfLimpo = row.cpf.toString().replace(/\D/g, '');
-          if (!validateCPF(cpfLimpo)) {
+          const cpfString = String(row.cpf).trim();
+          const cpfLimpo = cpfString.replace(/\D/g, '');
+          if (!cpfLimpo || cpfLimpo.length !== 11 || !validateCPF(cpfLimpo)) {
             errors.push({
               row: rowNumber,
               error: 'CPF inválido',
@@ -105,8 +106,19 @@ export default function CadastroLote() {
             continue;
           }
 
-          // Validar data de nascimento
-          const dataNascimento = new Date(row.data_nascimento);
+          // Validar data de nascimento (aceita formatos DD/MM/AAAA e AAAA-MM-DD)
+          let dataNascimento: Date;
+          const dataString = String(row.data_nascimento).trim();
+          
+          if (dataString.includes('/')) {
+            // Formato brasileiro DD/MM/AAAA
+            const [dia, mes, ano] = dataString.split('/');
+            dataNascimento = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+          } else {
+            // Formato ISO AAAA-MM-DD
+            dataNascimento = new Date(dataString);
+          }
+          
           if (isNaN(dataNascimento.getTime())) {
             errors.push({
               row: rowNumber,
@@ -288,7 +300,7 @@ export default function CadastroLote() {
               <li><strong>cpf:</strong> CPF (apenas números ou com formatação)</li>
               <li><strong>idade:</strong> Idade em números</li>
               <li><strong>telefone1:</strong> Telefone principal</li>
-              <li><strong>data_nascimento:</strong> Data no formato AAAA-MM-DD</li>
+              <li><strong>data_nascimento:</strong> Data no formato DD/MM/AAAA (ex: 15/01/1990)</li>
             </ul>
             
             <p className="mt-4"><strong>Colunas opcionais:</strong></p>

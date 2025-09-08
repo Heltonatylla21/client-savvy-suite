@@ -12,6 +12,11 @@ export default defineConfig(({ mode }) => ({
   preview: {
     port: 4173,
     host: true,
+    allowedHosts: [
+      'client-savvy-suite-1.onrender.com',
+      'localhost',
+      '127.0.0.1'
+    ],
   },
   build: {
     outDir: 'dist',

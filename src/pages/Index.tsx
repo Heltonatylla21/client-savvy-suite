@@ -1,10 +1,11 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CadastroCliente from "@/components/CadastroCliente";
 import ConsultaClientes from "@/components/ConsultaClientes";
+import ConsultaLote from "@/components/ConsultaLote";
 import Aniversariantes from "@/components/Aniversariantes";
 import Dashboard from "@/components/Dashboard";
 import CadastroLote from "@/components/CadastroLote";
-import { UserPlus, Search, Calendar, BarChart3, Upload } from "lucide-react";
+import { UserPlus, Search, Calendar, BarChart3, Upload, FileSearch } from "lucide-react";
 
 const Index = () => {
   return (
@@ -20,7 +21,7 @@ const Index = () => {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-6 mb-8">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               Dashboard
@@ -36,6 +37,10 @@ const Index = () => {
             <TabsTrigger value="consulta" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
               Consulta
+            </TabsTrigger>
+            <TabsTrigger value="consulta-lote" className="flex items-center gap-2">
+              <FileSearch className="w-4 h-4" />
+              Consulta Lote
             </TabsTrigger>
             <TabsTrigger value="aniversariantes" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -57,6 +62,10 @@ const Index = () => {
 
           <TabsContent value="consulta" className="space-y-6">
             <ConsultaClientes />
+          </TabsContent>
+
+          <TabsContent value="consulta-lote" className="space-y-6">
+            <ConsultaLote />
           </TabsContent>
 
           <TabsContent value="aniversariantes" className="space-y-6">

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPF, formatPhone } from "@/lib/validators";
-import { Search, User, Phone, Calendar, Users } from "lucide-react";
+import { Search, User, Phone, Calendar, Users, Trash2 } from "lucide-react";
 
 interface Cliente {
   id: string;
@@ -114,6 +114,35 @@ const ConsultaClientes = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
+  const handleDeleteClient = async (clienteId: string, clienteNome: string) => {
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o cliente ${clienteNome}?`);
+    
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .eq('id', clienteId);
+
+      if (error) throw error;
+
+      // Remove client from local state
+      setClientes(clientes.filter(c => c.id !== clienteId));
+      
+      toast({
+        title: "Cliente excluído",
+        description: `${clienteNome} foi excluído com sucesso.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir",
+        description: error.message || "Ocorreu um erro ao excluir o cliente.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -223,6 +252,17 @@ const ConsultaClientes = () => {
                     <div className="space-y-1 text-sm">
                       <p><strong>Nascimento:</strong> {formatDate(cliente.data_nascimento)}</p>
                       <p><strong>Cadastrado em:</strong> {formatDate(cliente.created_at)}</p>
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteClient(cliente.id, cliente.nome)}
+                        className="w-full"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Excluir Cliente
+                      </Button>
                     </div>
                   </div>
                 </div>

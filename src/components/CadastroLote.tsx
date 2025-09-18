@@ -93,10 +93,10 @@ export default function CadastroLote() {
 
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const rowNumber = i + 2;
+        const rowNumber = i + 2; // +2 porque começa na linha 2 do Excel
 
         try {
-          // Validação dos campos obrigatórios
+          // Validação dos dados
           if (!row.nome || !row.cpf || !row.telefone1 || !row.data_nascimento) {
             errors.push({
               row: rowNumber,
@@ -124,7 +124,7 @@ export default function CadastroLote() {
           
           if (dataString.includes('/')) {
             const [dia, mes, ano] = dataString.split('/');
-            dataNascimento = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+            dataNascimento = new Date(`${ano}-${mes}-${dia}`);
           } else {
             dataNascimento = new Date(dataString);
           }

@@ -26,31 +26,51 @@ const parseDateString = (dateString: string): Date | null => {
   if (!dateString) return null;
   
   const cleanDateString = String(dateString).trim();
+  console.log(`Processando data: "${cleanDateString}"`);
   
   // Se a data contém '/', assume formato DD/MM/AAAA
   if (cleanDateString.includes('/')) {
     const parts = cleanDateString.split('/');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) {
+      console.log(`Erro: Data não tem 3 partes: ${parts}`);
+      return null;
+    }
     
     const dia = parseInt(parts[0], 10);
     const mes = parseInt(parts[1], 10);
     const ano = parseInt(parts[2], 10);
     
+    console.log(`Partes da data - Dia: ${dia}, Mês: ${mes}, Ano: ${ano}`);
+    
     // Validações básicas
-    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
-    if (dia < 1 || dia > 31) return null;
-    if (mes < 1 || mes > 12) return null;
-    if (ano < 1900 || ano > new Date().getFullYear()) return null;
+    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) {
+      console.log('Erro: Alguma parte da data não é número');
+      return null;
+    }
+    if (dia < 1 || dia > 31) {
+      console.log(`Erro: Dia inválido: ${dia}`);
+      return null;
+    }
+    if (mes < 1 || mes > 12) {
+      console.log(`Erro: Mês inválido: ${mes}`);
+      return null;
+    }
+    if (ano < 1900 || ano > new Date().getFullYear()) {
+      console.log(`Erro: Ano inválido: ${ano}`);
+      return null;
+    }
     
     // Criar data usando o construtor com parâmetros específicos
     // Nota: mes - 1 porque o construtor Date usa mês baseado em zero (0-11)
     const date = new Date(ano, mes - 1, dia);
+    console.log(`Data criada: ${date.toISOString()}`);
     
     // Verificar se a data criada corresponde aos valores fornecidos
     // (isso detecta datas inválidas como 31/02/2023)
     if (date.getFullYear() !== ano || 
         date.getMonth() !== (mes - 1) || 
         date.getDate() !== dia) {
+      console.log(`Erro: Data inválida - esperado: ${dia}/${mes}/${ano}, obtido: ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`);
       return null;
     }
     
@@ -178,11 +198,19 @@ export default function CadastroLote() {
             continue;
           }
 
-          // Validar se a data não é futura
-          if (dataNascimento > new Date()) {
+          // Debug temporário - remover após confirmar que está funcionando
+          console.log(`Linha ${rowNumber}: Data original: ${row.data_nascimento}, Data processada: ${dataNascimento.toISOString()}, Data formatada: ${formatDateToISO(dataNascimento)}`);
+
+          // Validar se a data não é futura (comparar apenas as datas, sem horário)
+          const hoje = new Date();
+          hoje.setHours(0, 0, 0, 0); // Zerar horário para comparar apenas a data
+          const dataNascimentoSemHora = new Date(dataNascimento);
+          dataNascimentoSemHora.setHours(0, 0, 0, 0);
+          
+          if (dataNascimentoSemHora > hoje) {
             errors.push({
               row: rowNumber,
-              error: 'Data de nascimento não pode ser no futuro',
+              error: `Data de nascimento não pode ser no futuro. Data informada: ${row.data_nascimento}`,
               data: row
             });
             continue;

@@ -118,7 +118,7 @@ export default function CadastroLote() {
             continue;
           }
 
-          // Validar data de nascimento (aceita formatos DD/MM/AAAA e AAAA-MM-DD)
+          // Validar e corrigir a data de nascimento para o formato AAAA-MM-DD
           let dataNascimento: Date;
           const dataString = String(row.data_nascimento).trim();
           

@@ -6,8 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPF, formatPhone } from "@/lib/validators";
-import { Download, Search, FileSpreadsheet } from "lucide-react";
-import * as XLSX from 'xlsx';
+import { Download, Search, FileSpreadsheet, Users } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface Cliente {
   id: string;
@@ -25,11 +25,11 @@ const ConsultaLote = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [searchTerms, setSearchTerms] = useState("");
-  const [searchType, setSearchType] = useState<"cpf" | "telefone">("cpf");
+  const [searchType, setSearchType] = useState<"cpf" | "telefone" | "all">("cpf");
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const handleBatchSearch = async () => {
-    if (!searchTerms.trim()) {
+    if (searchType !== "all" && !searchTerms.trim()) {
       toast({
         title: "Campo obrigatório",
         description: "Digite os termos para busca em lote.",
@@ -41,76 +41,48 @@ const ConsultaLote = () => {
     setLoading(true);
     
     try {
-      let searchList: string[] = [];
+      let query = supabase.from("clientes").select("*").order("nome", { ascending: true });
 
-      if (searchType === "cpf") {
-        // Split CPFs by line break or comma and clean them
-        searchList = searchTerms
+      if (searchType === "all") {
+        // Fetch all clients
+      } else {
+        const searchList = searchTerms
           .split(/[\n,]/)
-          .map(cpf => cpf.replace(/\D/g, '').trim())
-          .filter(cpf => cpf.length === 11);
-        
+          .map(term => term.replace(/\D/g, "").trim())
+          .filter(term => term.length > 0);
+
         if (searchList.length === 0) {
           toast({
-            title: "CPFs inválidos",
-            description: "Digite CPFs válidos separados por linha ou vírgula.",
+            title: "Termos de busca inválidos",
+            description: "Digite termos válidos separados por linha ou vírgula.",
             variant: "destructive"
           });
           setLoading(false);
           return;
         }
-      } else {
-        // Split phones and clean them
-        searchList = searchTerms
-          .split(/[\n,]/)
-          .map(phone => phone.replace(/\D/g, '').trim())
-          .filter(phone => phone.length >= 8);
-        
-        if (searchList.length === 0) {
-          toast({
-            title: "Telefones inválidos",
-            description: "Digite telefones válidos separados por linha ou vírgula.",
-            variant: "destructive"
+
+        if (searchType === "cpf") {
+          query = query.in("cpf", searchList.filter(cpf => cpf.length === 11));
+        } else {
+          const phonePatterns: string[] = [];
+          searchList.forEach(phone => {
+            phonePatterns.push(phone);
+            if (phone.length > 9) {
+              phonePatterns.push(phone.substring(2));
+            }
+            if (phone.length <= 9) {
+              const commonDDDs = ["11", "21", "31", "41", "51", "61", "71", "81", "85"];
+              commonDDDs.forEach(ddd => {
+                phonePatterns.push(ddd + phone);
+              });
+            }
           });
-          setLoading(false);
-          return;
+          const uniquePatterns = [...new Set(phonePatterns)];
+          const phoneConditions = uniquePatterns.map(pattern => 
+            `telefone1.eq.${pattern},telefone2.eq.${pattern}`
+          ).join(",");
+          query = query.or(phoneConditions);
         }
-      }
-
-      let query = supabase.from('clientes').select('*');
-
-      if (searchType === "cpf") {
-        query = query.in('cpf', searchList);
-      } else {
-        // For phones, create expanded patterns with and without DDD
-        const phonePatterns: string[] = [];
-        
-        searchList.forEach(phone => {
-          phonePatterns.push(phone);
-          
-          // If has more than 9 digits, also search without the first 2 (DDD)
-          if (phone.length > 9) {
-            phonePatterns.push(phone.substring(2));
-          }
-          
-          // If has 9 digits or less, also search with common DDDs
-          if (phone.length <= 9) {
-            const commonDDDs = ['11', '21', '31', '41', '51', '61', '71', '81', '85'];
-            commonDDDs.forEach(ddd => {
-              phonePatterns.push(ddd + phone);
-            });
-          }
-        });
-
-        // Remove duplicates
-        const uniquePatterns = [...new Set(phonePatterns)];
-        
-        // Create OR conditions for telefone1 and telefone2
-        const phoneConditions = uniquePatterns.map(pattern => 
-          `telefone1.eq.${pattern},telefone2.eq.${pattern}`
-        ).join(',');
-        
-        query = query.or(phoneConditions);
       }
 
       const { data, error } = await query;
@@ -144,39 +116,33 @@ const ConsultaLote = () => {
       return;
     }
 
-    // Prepare data for Excel export
     const excelData = clientes.map(cliente => ({
       Nome: cliente.nome,
       CPF: formatCPF(cliente.cpf),
       Idade: cliente.idade,
       Telefone1: formatPhone(cliente.telefone1),
-      Telefone2: cliente.telefone2 ? formatPhone(cliente.telefone2) : '',
-      Wizebot: cliente.wizebot || '',
-      'Data de Nascimento': new Date(cliente.data_nascimento).toLocaleDateString('pt-BR'),
-      'Data de Cadastro': new Date(cliente.created_at).toLocaleDateString('pt-BR')
+      Telefone2: cliente.telefone2 ? formatPhone(cliente.telefone2) : "",
+      Wizebot: cliente.wizebot || "",
+      "Data de Nascimento": new Date(cliente.data_nascimento).toLocaleDateString("pt-BR"),
+      "Data de Cadastro": new Date(cliente.created_at).toLocaleDateString("pt-BR")
     }));
 
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
 
-    // Auto-size columns
     const colWidths = Object.keys(excelData[0] || {}).map(key => ({
       wch: Math.max(
         key.length,
-        Math.max(...excelData.map(row => String(row[key as keyof typeof row] || '').length))
+        Math.max(...excelData.map(row => String(row[key as keyof typeof row] || "").length))
       )
     }));
-    ws['!cols'] = colWidths;
+    ws["!cols"] = colWidths;
 
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+    XLSX.utils.book_append_sheet(wb, ws, "Clientes");
 
-    // Generate filename with current date
-    const today = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    const today = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
     const filename = `clientes_consulta_lote_${today}.xlsx`;
 
-    // Save file
     XLSX.writeFile(wb, filename);
 
     toast({
@@ -186,7 +152,7 @@ const ConsultaLote = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    return new Date(dateString).toLocaleDateString("pt-BR");
   };
 
   return (
@@ -195,49 +161,59 @@ const ConsultaLote = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="w-5 h-5" />
-            Consulta em Lote
+            Consulta de Clientes
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant={searchType === "cpf" ? "default" : "outline"}
-                onClick={() => setSearchType("cpf")}
+                onClick={() => {setSearchType("cpf"); setClientes([]);}}
                 size="sm"
               >
                 Buscar por CPF
               </Button>
               <Button
                 variant={searchType === "telefone" ? "default" : "outline"}
-                onClick={() => setSearchType("telefone")}
+                onClick={() => {setSearchType("telefone"); setClientes([]);}}
                 size="sm"
               >
                 Buscar por Telefone
               </Button>
+              <Button
+                variant={searchType === "all" ? "default" : "outline"}
+                onClick={() => {setSearchType("all"); setClientes([]);}}
+                size="sm"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Buscar Todos Clientes
+              </Button>
             </div>
             
-            <div>
-              <Label htmlFor="searchTerms">
-                {searchType === "cpf" ? "Lista de CPFs" : "Lista de Telefones"}
-              </Label>
-              <Textarea
-                id="searchTerms"
-                value={searchTerms}
-                onChange={(e) => setSearchTerms(e.target.value)}
-                placeholder={
-                  searchType === "cpf" 
-                    ? "Digite os CPFs separados por linha ou vírgula:\n123.456.789-00\n987.654.321-00\nou\n12345678900, 98765432100"
-                    : "Digite os telefones separados por linha ou vírgula:\n(11) 99999-9999\n21987654321\nou\n11999999999, 21987654321"
-                }
-                className="min-h-[120px] resize-none"
-                rows={5}
-              />
-            </div>
+            {searchType !== "all" && (
+              <div>
+                <Label htmlFor="searchTerms">
+                  {searchType === "cpf" ? "Lista de CPFs" : "Lista de Telefones"}
+                </Label>
+                <Textarea
+                  id="searchTerms"
+                  value={searchTerms}
+                  onChange={(e) => setSearchTerms(e.target.value)}
+                  placeholder={
+                    searchType === "cpf" 
+                      ? "Digite os CPFs separados por linha ou vírgula:\n123.456.789-00\n987.654.321-00\nou\n12345678900, 98765432100"
+                      : "Digite os telefones separados por linha ou vírgula:\n(11) 99999-9999\n21987654321\nou\n11999999999, 21987654321"
+                  }
+                  className="min-h-[120px] resize-none"
+                  rows={5}
+                />
+              </div>
+            )}
 
             <div className="flex gap-2">
               <Button onClick={handleBatchSearch} disabled={loading}>
-                {loading ? "Buscando..." : "Buscar em Lote"}
+                {loading ? "Buscando..." : "Buscar"}
               </Button>
               
               {clientes.length > 0 && (

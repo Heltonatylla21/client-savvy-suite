@@ -14,12 +14,25 @@ import { Upload, Download, AlertCircle, CheckCircle } from 'lucide-react';
 interface ClienteExcel {
   nome: string;
   cpf: string;
-  idade: number;
+  idade?: number;
   telefone1: string;
   telefone2?: string;
   data_nascimento: string;
   wizebot?: string;
 }
+
+// Função para calcular a idade a partir da data de nascimento
+const calculateAge = (birthDateString: string): number | null => {
+  if (!birthDateString) return null;
+  const today = new Date();
+  const birthDate = new Date(birthDateString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
 
 export default function CadastroLote() {
   const [file, setFile] = useState<File | null>(null);
@@ -35,7 +48,6 @@ export default function CadastroLote() {
       {
         nome: 'João Silva',
         cpf: '12345678901',
-        idade: 30,
         telefone1: '11999999999',
         telefone2: '1133333333',
         data_nascimento: '15/01/1994',
@@ -81,14 +93,14 @@ export default function CadastroLote() {
 
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const rowNumber = i + 2; // +2 porque começa na linha 2 do Excel
+        const rowNumber = i + 2;
 
         try {
-          // Validação dos dados
-          if (!row.nome || !row.cpf || !row.idade || !row.telefone1 || !row.data_nascimento) {
+          // Validação dos campos obrigatórios
+          if (!row.nome || !row.cpf || !row.telefone1 || !row.data_nascimento) {
             errors.push({
               row: rowNumber,
-              error: 'Campos obrigatórios faltando (nome, cpf, idade, telefone1, data_nascimento)',
+              error: 'Campos obrigatórios faltando (nome, cpf, telefone1, data_nascimento)',
               data: row
             });
             continue;
@@ -111,11 +123,9 @@ export default function CadastroLote() {
           const dataString = String(row.data_nascimento).trim();
           
           if (dataString.includes('/')) {
-            // Formato brasileiro DD/MM/AAAA
             const [dia, mes, ano] = dataString.split('/');
             dataNascimento = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
           } else {
-            // Formato ISO AAAA-MM-DD
             dataNascimento = new Date(dataString);
           }
           
@@ -128,11 +138,22 @@ export default function CadastroLote() {
             continue;
           }
 
+          // Calcular idade automaticamente a partir da data de nascimento
+          const calculatedAge = calculateAge(dataNascimento.toISOString().split('T')[0]);
+          if (calculatedAge === null || isNaN(calculatedAge)) {
+             errors.push({
+              row: rowNumber,
+              error: 'Não foi possível calcular a idade a partir da data de nascimento.',
+              data: row
+            });
+            continue;
+          }
+
           // Preparar dados para inserção
           const clienteData: ClienteExcel = {
             nome: row.nome.toString().trim(),
             cpf: cpfLimpo,
-            idade: parseInt(row.idade),
+            idade: calculatedAge,
             telefone1: row.telefone1.toString().replace(/\D/g, ''),
             telefone2: row.telefone2 ? row.telefone2.toString().replace(/\D/g, '') : undefined,
             data_nascimento: dataNascimento.toISOString().split('T')[0],
@@ -298,7 +319,6 @@ export default function CadastroLote() {
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li><strong>nome:</strong> Nome completo do cliente</li>
               <li><strong>cpf:</strong> CPF (apenas números ou com formatação)</li>
-              <li><strong>idade:</strong> Idade em números</li>
               <li><strong>telefone1:</strong> Telefone principal</li>
               <li><strong>data_nascimento:</strong> Data no formato DD/MM/AAAA (ex: 15/01/1990)</li>
             </ul>
@@ -308,6 +328,7 @@ export default function CadastroLote() {
               <li><strong>telefone2:</strong> Telefone secundário</li>
               <li><strong>wizebot:</strong> Informações do Wizebot</li>
             </ul>
+            <p className="mt-4"><strong>Observação:</strong> O campo "idade" não é obrigatório na planilha. Ele será calculado automaticamente com base na data de nascimento.</p>
           </div>
         </CardContent>
       </Card>

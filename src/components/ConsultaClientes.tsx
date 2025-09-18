@@ -21,6 +21,14 @@ interface Cliente {
   created_at: string;
 }
 
+// Função para verificar se o cliente faz aniversário no mês atual
+const isAniversarianteDoMes = (dataNascimento: string): boolean => {
+  if (!dataNascimento) return false;
+  const today = new Date();
+  const birthDate = new Date(dataNascimento);
+  return today.getMonth() === birthDate.getMonth();
+};
+
 const ConsultaClientes = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -47,7 +55,6 @@ const ConsultaClientes = () => {
       if (searchType === "cpf") {
         query = query.eq('cpf', cleanSearchTerm);
       } else if (searchType === "lote") {
-        // Split CPFs by line break or comma and clean them
         const cpfList = searchTerm
           .split(/[\n,]/)
           .map(cpf => cpf.replace(/\D/g, '').trim())
@@ -65,15 +72,12 @@ const ConsultaClientes = () => {
         
         query = query.in('cpf', cpfList);
       } else {
-        // Enhanced phone search: search with and without DDD
         const phonePatterns = [cleanSearchTerm];
         
-        // If has more than 9 digits, also search without the first 2 (DDD)
         if (cleanSearchTerm.length > 9) {
           phonePatterns.push(cleanSearchTerm.substring(2));
         }
         
-        // If has 9 digits or less, also search with common DDDs
         if (cleanSearchTerm.length <= 9) {
           const commonDDDs = ['11', '21', '31', '41', '51', '61', '71', '81', '85'];
           commonDDDs.forEach(ddd => {
@@ -81,7 +85,6 @@ const ConsultaClientes = () => {
           });
         }
         
-        // Create OR conditions for all phone patterns
         const phoneConditions = phonePatterns.map(pattern => 
           `telefone1.eq.${pattern},telefone2.eq.${pattern}`
         ).join(',');
@@ -129,7 +132,6 @@ const ConsultaClientes = () => {
 
       if (error) throw error;
 
-      // Remove client from local state
       setClientes(clientes.filter(c => c.id !== clienteId));
       
       toast({
@@ -227,8 +229,13 @@ const ConsultaClientes = () => {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <h3 className="font-semibold text-lg mb-2">{cliente.nome}</h3>
-                    <div className="space-y-1 text-sm">
+                    <div className="p-2 border border-green-500 rounded-md bg-green-50">
+                      <h3 className="text-black font-semibold text-lg">{cliente.nome}</h3>
+                    </div>
+                    {isAniversarianteDoMes(cliente.data_nascimento) && (
+                      <Badge className="mt-2" variant="secondary">Aniversariante do Mês</Badge>
+                    )}
+                    <div className="space-y-1 text-sm mt-2">
                       <p><strong>CPF:</strong> {formatCPF(cliente.cpf)}</p>
                       <p><strong>Idade:</strong> {cliente.idade} anos</p>
                     </div>

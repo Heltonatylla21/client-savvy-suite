@@ -6,8 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPF, formatPhone } from "@/lib/validators";
-import { Download, Search, FileSpreadsheet, Users } from "lucide-react";
+import { Download, Search, FileSpreadsheet, Users, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Cliente {
   id: string;
@@ -27,6 +28,9 @@ const ConsultaLote = () => {
   const [searchTerms, setSearchTerms] = useState("");
   const [searchType, setSearchType] = useState<"cpf" | "telefone" | "all">("cpf");
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+
+  const isAllSelected = clientes.length > 0 && selectedClients.length === clientes.length;
 
   const handleBatchSearch = async () => {
     if (searchType !== "all" && !searchTerms.trim()) {
@@ -39,6 +43,7 @@ const ConsultaLote = () => {
     }
 
     setLoading(true);
+    setSelectedClients([]);
     
     try {
       let query = supabase.from("clientes").select("*").order("nome", { ascending: true });
@@ -155,6 +160,65 @@ const ConsultaLote = () => {
     return new Date(dateString).toLocaleDateString("pt-BR");
   };
 
+  const handleClientSelect = (id: string, isChecked: boolean) => {
+    if (isChecked) {
+      setSelectedClients([...selectedClients, id]);
+    } else {
+      setSelectedClients(selectedClients.filter(clientId => clientId !== id));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedClients([]);
+    } else {
+      setSelectedClients(clientes.map(cliente => cliente.id));
+    }
+  };
+
+  const handleDeleteSelectedClients = async () => {
+    if (selectedClients.length === 0) {
+      toast({
+        title: "Nenhum cliente selecionado",
+        description: "Selecione pelo menos um cliente para excluir.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Tem certeza que deseja excluir ${selectedClients.length} cliente(s) selecionado(s)?`);
+    
+    if (!confirmed) return;
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .in('id', selectedClients);
+
+      if (error) throw error;
+
+      const remainingClients = clientes.filter(c => !selectedClients.includes(c.id));
+      setClientes(remainingClients);
+      setSelectedClients([]);
+      
+      toast({
+        title: "Clientes excluídos",
+        description: `${selectedClients.length} cliente(s) foram excluídos com sucesso.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir",
+        description: error.message || "Ocorreu um erro ao excluir os clientes.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -217,10 +281,20 @@ const ConsultaLote = () => {
               </Button>
               
               {clientes.length > 0 && (
-                <Button onClick={exportToExcel} variant="outline">
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Exportar Excel
-                </Button>
+                <>
+                  <Button onClick={exportToExcel} variant="outline">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Exportar Excel
+                  </Button>
+                  <Button
+                    onClick={handleDeleteSelectedClients}
+                    variant="destructive"
+                    disabled={selectedClients.length === 0 || loading}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir Selecionados ({selectedClients.length})
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -229,21 +303,29 @@ const ConsultaLote = () => {
 
       {clientes.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Resultados da Busca ({clientes.length} clientes)</span>
-              <Button onClick={exportToExcel} variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              Resultados da Busca ({clientes.length} clientes)
             </CardTitle>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isAllSelected}
+                onCheckedChange={handleSelectAll}
+                id="select-all"
+              />
+              <Label htmlFor="select-all">Selecionar Todos</Label>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
               {clientes.map((cliente) => (
                 <Card key={cliente.id} className="border-l-4 border-l-primary/30">
-                  <CardContent className="pt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <CardContent className="pt-4 flex items-center space-x-4">
+                    <Checkbox
+                      checked={selectedClients.includes(cliente.id)}
+                      onCheckedChange={(isChecked) => handleClientSelect(cliente.id, isChecked)}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
                       <div>
                         <h3 className="font-semibold text-lg mb-2">{cliente.nome}</h3>
                         <div className="space-y-1 text-sm">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,18 +8,37 @@ import { supabase } from "@/integrations/supabase/client";
 import { validateCPF, formatCPF, formatPhone } from "@/lib/validators";
 import { UserPlus } from "lucide-react";
 
+// Função para calcular a idade a partir da data de nascimento
+const calculateAge = (birthDateString: string): number | null => {
+  if (!birthDateString) return null;
+  const today = new Date();
+  const birthDate = new Date(birthDateString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
 const CadastroCliente = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     nome: "",
     cpf: "",
-    idade: "",
     telefone1: "",
     telefone2: "",
     wizebot: "",
     dataNascimento: ""
   });
+  const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
+
+  // Atualiza a idade calculada sempre que a data de nascimento muda
+  useEffect(() => {
+    const age = calculateAge(formData.dataNascimento);
+    setCalculatedAge(age);
+  }, [formData.dataNascimento]);
 
   const handleInputChange = (field: string, value: string) => {
     let formattedValue = value;
@@ -47,6 +66,16 @@ const CadastroCliente = () => {
       });
       return;
     }
+    
+    // Valida se a idade foi calculada com sucesso
+    if (calculatedAge === null || isNaN(calculatedAge)) {
+        toast({
+            title: "Data de Nascimento Inválida",
+            description: "A idade não pode ser calculada. Verifique a data de nascimento.",
+            variant: "destructive"
+        });
+        return;
+    }
 
     setLoading(true);
     
@@ -55,8 +84,8 @@ const CadastroCliente = () => {
         .from('clientes')
         .insert({
           nome: formData.nome,
-          cpf: formData.cpf.replace(/\D/g, ''), // Remove formatting for storage
-          idade: parseInt(formData.idade),
+          cpf: formData.cpf.replace(/\D/g, ''), // Remove formatação para armazenamento
+          idade: calculatedAge,
           telefone1: formData.telefone1.replace(/\D/g, ''),
           telefone2: formData.telefone2 ? formData.telefone2.replace(/\D/g, '') : null,
           wizebot: formData.wizebot || null,
@@ -74,12 +103,13 @@ const CadastroCliente = () => {
       setFormData({
         nome: "",
         cpf: "",
-        idade: "",
         telefone1: "",
         telefone2: "",
         wizebot: "",
         dataNascimento: ""
       });
+      setCalculatedAge(null);
+
     } catch (error: any) {
       toast({
         title: "Erro ao Cadastrar",
@@ -126,20 +156,6 @@ const CadastroCliente = () => {
             </div>
             
             <div>
-              <Label htmlFor="idade">Idade *</Label>
-              <Input
-                id="idade"
-                type="number"
-                value={formData.idade}
-                onChange={(e) => handleInputChange("idade", e.target.value)}
-                placeholder="Idade"
-                min="1"
-                max="120"
-                required
-              />
-            </div>
-            
-            <div>
               <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
               <Input
                 id="dataNascimento"
@@ -149,6 +165,20 @@ const CadastroCliente = () => {
                 required
               />
             </div>
+
+            {calculatedAge !== null && (
+                <div>
+                    <Label htmlFor="idade">Idade</Label>
+                    <Input
+                        id="idade"
+                        type="text"
+                        value={calculatedAge.toString()}
+                        placeholder="Idade"
+                        readOnly
+                        className="bg-muted"
+                    />
+                </div>
+            )}
             
             <div>
               <Label htmlFor="telefone1">Telefone 1 *</Label>

@@ -1,25 +1,12 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
-import { validateCPF } from '@/lib/validators';
-import { Upload, Download, AlertCircle, CheckCircle } from 'lucide-react';
-
-interface ClienteExcel {
-  nome: string;
-  cpf: string;
-  idade?: number;
-  telefone1: string;
-  telefone2?: string;
-  data_nascimento: string;
-  wizebot?: string;
-}
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { validateCPF, formatCPF, formatPhone } from "@/lib/validators";
+import { UserPlus } from "lucide-react";
 
 // Função para calcular a idade a partir da data de nascimento
 const calculateAge = (birthDateString: string): number | null => {
@@ -34,304 +21,206 @@ const calculateAge = (birthDateString: string): number | null => {
   return age;
 };
 
-export default function CadastroLote() {
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState<{
-    success: number;
-    errors: Array<{ row: number; error: string; data: any }>;
-  } | null>(null);
+const CadastroCliente = () => {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    nome: "",
+    cpf: "",
+    telefone1: "",
+    telefone2: "",
+    wizebot: "",
+    dataNascimento: ""
+  });
+  const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
 
-  const downloadTemplate = () => {
-    const template = [
-      {
-        nome: 'João Silva',
-        cpf: '12345678901',
-        telefone1: '11999999999',
-        telefone2: '1133333333',
-        data_nascimento: '15/01/1994',
-        wizebot: 'joao123'
-      }
-    ];
+  // Atualiza a idade calculada sempre que a data de nascimento muda
+  useEffect(() => {
+    const age = calculateAge(formData.dataNascimento);
+    setCalculatedAge(age);
+  }, [formData.dataNascimento]);
 
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
-    XLSX.writeFile(wb, 'template_clientes.xlsx');
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setResults(null);
+  const handleInputChange = (field: string, value: string) => {
+    let formattedValue = value;
+    
+    if (field === "cpf") {
+      formattedValue = formatCPF(value);
+    } else if (field === "telefone1" || field === "telefone2") {
+      formattedValue = formatPhone(value);
     }
+    
+    setFormData(prev => ({
+      ...prev,
+      [field]: formattedValue
+    }));
   };
 
-  const processExcel = async () => {
-    if (!file) return;
-
-    setIsProcessing(true);
-    setProgress(0);
-    setResults(null);
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const data: any[] = XLSX.utils.sheet_to_json(worksheet);
-
-      if (data.length === 0) {
-        toast.error('Arquivo Excel está vazio');
-        setIsProcessing(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateCPF(formData.cpf)) {
+      toast({
+        title: "CPF Inválido",
+        description: "Por favor, insira um CPF válido.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Valida se a idade foi calculada com sucesso
+    if (calculatedAge === null || isNaN(calculatedAge)) {
+        toast({
+            title: "Data de Nascimento Inválida",
+            description: "A idade não pode ser calculada. Verifique a data de nascimento.",
+            variant: "destructive"
+        });
         return;
-      }
+    }
 
-      const success: number[] = [];
-      const errors: Array<{ row: number; error: string; data: any }> = [];
+    setLoading(true);
+    
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .insert({
+          nome: formData.nome,
+          cpf: formData.cpf.replace(/\D/g, ''), // Remove formatação para armazenamento
+          idade: calculatedAge,
+          telefone1: formData.telefone1.replace(/\D/g, ''),
+          telefone2: formData.telefone2 ? formData.telefone2.replace(/\D/g, '') : null,
+          wizebot: formData.wizebot || null,
+          data_nascimento: formData.dataNascimento
+        });
 
-      for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        const rowNumber = i + 2; // +2 porque começa na linha 2 do Excel
+      if (error) throw error;
 
-        try {
-          // Validação dos campos obrigatórios
-          if (!row.nome || !row.cpf || !row.telefone1 || !row.data_nascimento) {
-            errors.push({
-              row: rowNumber,
-              error: 'Campos obrigatórios faltando (nome, cpf, telefone1, data_nascimento)',
-              data: row
-            });
-            continue;
-          }
-
-          // Validar CPF
-          const cpfString = String(row.cpf).trim();
-          const cpfLimpo = cpfString.replace(/\D/g, '');
-          if (!cpfLimpo || cpfLimpo.length !== 11 || !validateCPF(cpfLimpo)) {
-            errors.push({
-              row: rowNumber,
-              error: 'CPF inválido',
-              data: row
-            });
-            continue;
-          }
-
-          // Validar e corrigir a data de nascimento para o formato AAAA-MM-DD
-          let dataNascimento: Date;
-          const dataString = String(row.data_nascimento).trim();
-          
-          if (dataString.includes('/')) {
-            const [dia, mes, ano] = dataString.split('/');
-            dataNascimento = new Date(`${ano}-${mes}-${dia}`);
-          } else {
-            dataNascimento = new Date(dataString);
-          }
-          
-          if (isNaN(dataNascimento.getTime())) {
-            errors.push({
-              row: rowNumber,
-              error: 'Data de nascimento inválida',
-              data: row
-            });
-            continue;
-          }
-
-          // Calcular idade automaticamente a partir da data de nascimento
-          const calculatedAge = calculateAge(dataNascimento.toISOString().split('T')[0]);
-          if (calculatedAge === null || isNaN(calculatedAge)) {
-             errors.push({
-              row: rowNumber,
-              error: 'Não foi possível calcular a idade a partir da data de nascimento.',
-              data: row
-            });
-            continue;
-          }
-
-          // Preparar dados para inserção
-          const clienteData: ClienteExcel = {
-            nome: row.nome.toString().trim(),
-            cpf: cpfLimpo,
-            idade: calculatedAge,
-            telefone1: row.telefone1.toString().replace(/\D/g, ''),
-            telefone2: row.telefone2 ? row.telefone2.toString().replace(/\D/g, '') : undefined,
-            data_nascimento: dataNascimento.toISOString().split('T')[0],
-            wizebot: row.wizebot ? row.wizebot.toString().trim() : undefined
-          };
-
-          // Inserir no banco
-          const { error } = await supabase
-            .from('clientes')
-            .insert(clienteData);
-
-          if (error) {
-            errors.push({
-              row: rowNumber,
-              error: `Erro no banco: ${error.message}`,
-              data: row
-            });
-          } else {
-            success.push(rowNumber);
-          }
-
-        } catch (error) {
-          errors.push({
-            row: rowNumber,
-            error: `Erro inesperado: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-            data: row
-          });
-        }
-
-        // Atualizar progresso
-        setProgress(((i + 1) / data.length) * 100);
-      }
-
-      setResults({
-        success: success.length,
-        errors: errors
+      toast({
+        title: "Cliente Cadastrado",
+        description: "Cliente cadastrado com sucesso!",
       });
 
-      if (success.length > 0) {
-        toast.success(`${success.length} clientes cadastrados com sucesso!`);
-      }
+      // Reset form
+      setFormData({
+        nome: "",
+        cpf: "",
+        telefone1: "",
+        telefone2: "",
+        wizebot: "",
+        dataNascimento: ""
+      });
+      setCalculatedAge(null);
 
-      if (errors.length > 0) {
-        toast.error(`${errors.length} registros com erro. Verifique os detalhes abaixo.`);
-      }
-
-    } catch (error) {
-      toast.error('Erro ao processar arquivo Excel');
-      console.error('Erro:', error);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao Cadastrar",
+        description: error.message || "Ocorreu um erro ao cadastrar o cliente.",
+        variant: "destructive"
+      });
     } finally {
-      setIsProcessing(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Cadastro em Lote
-          </CardTitle>
-          <CardDescription>
-            Faça upload de um arquivo Excel para cadastrar múltiplos clientes de uma só vez
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Template Download */}
-          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserPlus className="w-5 h-5" />
+          Cadastro de Cliente
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="font-medium">Template Excel</h3>
-              <p className="text-sm text-muted-foreground">
-                Baixe o modelo com as colunas corretas
-              </p>
+              <Label htmlFor="nome">Nome *</Label>
+              <Input
+                id="nome"
+                value={formData.nome}
+                onChange={(e) => handleInputChange("nome", e.target.value)}
+                placeholder="Nome completo"
+                required
+              />
             </div>
-            <Button variant="outline" onClick={downloadTemplate}>
-              <Download className="h-4 w-4 mr-2" />
-              Baixar Template
-            </Button>
-          </div>
-
-          {/* File Upload */}
-          <div className="space-y-2">
-            <Label htmlFor="excel-file">Arquivo Excel</Label>
-            <Input
-              id="excel-file"
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              disabled={isProcessing}
-            />
-            {file && (
-              <p className="text-sm text-muted-foreground">
-                Arquivo selecionado: {file.name}
-              </p>
-            )}
-          </div>
-
-          {/* Process Button */}
-          <Button 
-            onClick={processExcel} 
-            disabled={!file || isProcessing}
-            className="w-full"
-          >
-            {isProcessing ? 'Processando...' : 'Processar Arquivo'}
-          </Button>
-
-          {/* Progress */}
-          {isProcessing && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Processando...</span>
-                <span>{Math.round(progress)}%</span>
-              </div>
-              <Progress value={progress} />
-            </div>
-          )}
-
-          {/* Results */}
-          {results && (
-            <div className="space-y-4">
-              {results.success > 0 && (
-                <Alert>
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>{results.success} clientes</strong> cadastrados com sucesso!
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {results.errors.length > 0 && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>{results.errors.length} registros</strong> com erro:
-                    <div className="mt-2 max-h-40 overflow-y-auto">
-                      {results.errors.map((error, index) => (
-                        <div key={index} className="text-xs mt-1 p-2 bg-background rounded">
-                          <strong>Linha {error.row}:</strong> {error.error}
-                          <br />
-                          <span className="text-muted-foreground">
-                            Nome: {error.data.nome || 'N/A'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Instructions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Instruções</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <p><strong>Colunas obrigatórias:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li><strong>nome:</strong> Nome completo do cliente</li>
-              <li><strong>cpf:</strong> CPF (apenas números ou com formatação)</li>
-              <li><strong>telefone1:</strong> Telefone principal</li>
-              <li><strong>data_nascimento:</strong> Data no formato DD/MM/AAAA (ex: 15/01/1990)</li>
-            </ul>
             
-            <p className="mt-4"><strong>Colunas opcionais:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li><strong>telefone2:</strong> Telefone secundário</li>
-              <li><strong>wizebot:</strong> Informações do Wizebot</li>
-            </ul>
-            <p className="mt-4"><strong>Observação:</strong> O campo "idade" não é obrigatório na planilha. Ele será calculado automaticamente com base na data de nascimento.</p>
+            <div>
+              <Label htmlFor="cpf">CPF *</Label>
+              <Input
+                id="cpf"
+                value={formData.cpf}
+                onChange={(e) => handleInputChange("cpf", e.target.value)}
+                placeholder="000.000.000-00"
+                maxLength={14}
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
+              <Input
+                id="dataNascimento"
+                type="date"
+                value={formData.dataNascimento}
+                onChange={(e) => handleInputChange("dataNascimento", e.target.value)}
+                required
+              />
+            </div>
+
+            {calculatedAge !== null && (
+                <div>
+                    <Label htmlFor="idade">Idade</Label>
+                    <Input
+                        id="idade"
+                        type="text"
+                        value={calculatedAge.toString()}
+                        placeholder="Idade"
+                        readOnly
+                        className="bg-muted"
+                    />
+                </div>
+            )}
+            
+            <div>
+              <Label htmlFor="telefone1">Telefone 1 *</Label>
+              <Input
+                id="telefone1"
+                value={formData.telefone1}
+                onChange={(e) => handleInputChange("telefone1", e.target.value)}
+                placeholder="(00) 00000-0000"
+                maxLength={15}
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="telefone2">Telefone 2</Label>
+              <Input
+                id="telefone2"
+                value={formData.telefone2}
+                onChange={(e) => handleInputChange("telefone2", e.target.value)}
+                placeholder="(00) 00000-0000"
+                maxLength={15}
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <Label htmlFor="wizebot">Wizebot</Label>
+              <Input
+                id="wizebot"
+                value={formData.wizebot}
+                onChange={(e) => handleInputChange("wizebot", e.target.value)}
+                placeholder="Informações do Wizebot"
+              />
+            </div>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+          
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Cadastrando..." : "Cadastrar Cliente"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
-}
+};
+
+export default CadastroCliente;

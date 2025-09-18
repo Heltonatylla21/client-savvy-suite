@@ -96,7 +96,7 @@ export default function CadastroLote() {
         const rowNumber = i + 2; // +2 porque começa na linha 2 do Excel
 
         try {
-          // Validação dos dados
+          // Validação dos campos obrigatórios
           if (!row.nome || !row.cpf || !row.telefone1 || !row.data_nascimento) {
             errors.push({
               row: rowNumber,

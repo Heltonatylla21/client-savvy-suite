@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { validateCPF, formatCPF, formatPhone } from "@/lib/validators";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Upload, FileInput } from "lucide-react";
+import * as XLSX from 'xlsx';
 
 // Função para calcular a idade a partir da data de nascimento
 const calculateAge = (birthDateString: string): number | null => {
@@ -21,101 +22,111 @@ const calculateAge = (birthDateString: string): number | null => {
   return age;
 };
 
-const CadastroCliente = () => {
+const CadastroLote = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    nome: "",
-    cpf: "",
-    telefone1: "",
-    telefone2: "",
-    wizebot: "",
-    dataNascimento: ""
-  });
-  const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
-  // Atualiza a idade calculada sempre que a data de nascimento muda
-  useEffect(() => {
-    const age = calculateAge(formData.dataNascimento);
-    setCalculatedAge(age);
-  }, [formData.dataNascimento]);
-
-  const handleInputChange = (field: string, value: string) => {
-    let formattedValue = value;
-    
-    if (field === "cpf") {
-      formattedValue = formatCPF(value);
-    } else if (field === "telefone1" || field === "telefone2") {
-      formattedValue = formatPhone(value);
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      [field]: formattedValue
-    }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0] || null;
+    setFile(selectedFile);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateCPF(formData.cpf)) {
+  const handleImport = async () => {
+    if (!file) {
       toast({
-        title: "CPF Inválido",
-        description: "Por favor, insira um CPF válido.",
+        title: "Nenhum arquivo selecionado",
+        description: "Por favor, selecione um arquivo Excel para importar.",
         variant: "destructive"
       });
       return;
     }
-    
-    // Valida se a idade foi calculada com sucesso
-    if (calculatedAge === null || isNaN(calculatedAge)) {
-        toast({
-            title: "Data de Nascimento Inválida",
-            description: "A idade não pode ser calculada. Verifique a data de nascimento.",
-            variant: "destructive"
-        });
-        return;
-    }
 
     setLoading(true);
-    
+
     try {
-      const { error } = await supabase
-        .from('clientes')
-        .insert({
-          nome: formData.nome,
-          cpf: formData.cpf.replace(/\D/g, ''), // Remove formatação para armazenamento
-          idade: calculatedAge,
-          telefone1: formData.telefone1.replace(/\D/g, ''),
-          telefone2: formData.telefone2 ? formData.telefone2.replace(/\D/g, '') : null,
-          wizebot: formData.wizebot || null,
-          data_nascimento: formData.dataNascimento
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet);
+
+      const clientsToInsert = [];
+      const errors = [];
+
+      for (const row of json) {
+        const nome = row.Nome;
+        const cpf = row.CPF?.toString().replace(/\D/g, '');
+        const dataNascimentoExcel = row["Data de Nascimento"]?.toString();
+        const telefone1 = row["Telefone 1"]?.toString().replace(/\D/g, '');
+        const telefone2 = row["Telefone 2"]?.toString().replace(/\D/g, '') || null;
+        const wizebot = row.Wizebot || null;
+        
+        // Validation
+        if (!nome || !cpf || !dataNascimentoExcel || !telefone1) {
+          errors.push(`Registro inválido (dados incompletos): ${JSON.stringify(row)}`);
+          continue;
+        }
+
+        if (!validateCPF(cpf)) {
+          errors.push(`CPF inválido: ${cpf}`);
+          continue;
+        }
+        
+        let dataNascimento;
+        try {
+          const [day, month, year] = dataNascimentoExcel.split('/');
+          dataNascimento = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        } catch {
+          errors.push(`Data de nascimento inválida: ${dataNascimentoExcel}`);
+          continue;
+        }
+
+        const idade = calculateAge(dataNascimento);
+
+        if (idade === null || isNaN(idade)) {
+          errors.push(`Não foi possível calcular a idade para o cliente ${nome}. Verifique a data de nascimento: ${dataNascimentoExcel}`);
+          continue;
+        }
+
+        clientsToInsert.push({
+          nome,
+          cpf,
+          data_nascimento: dataNascimento,
+          idade,
+          telefone1,
+          telefone2,
+          wizebot
         });
+      }
 
-      if (error) throw error;
+      if (clientsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('clientes')
+          .insert(clientsToInsert);
 
+        if (error) throw error;
+      }
+      
       toast({
-        title: "Cliente Cadastrado",
-        description: "Cliente cadastrado com sucesso!",
+        title: "Importação concluída",
+        description: `Foram cadastrados ${clientsToInsert.length} clientes. ${errors.length > 0 ? `Com ${errors.length} erros.` : ''}`,
       });
 
-      // Reset form
-      setFormData({
-        nome: "",
-        cpf: "",
-        telefone1: "",
-        telefone2: "",
-        wizebot: "",
-        dataNascimento: ""
-      });
-      setCalculatedAge(null);
+      if (errors.length > 0) {
+        console.error("Erros de importação:", errors);
+      }
+
+      // Limpar formulário
+      setFile(null);
 
     } catch (error: any) {
       toast({
-        title: "Erro ao Cadastrar",
-        description: error.message || "Ocorreu um erro ao cadastrar o cliente.",
+        title: "Erro ao importar",
+        description: error.message || "Ocorreu um erro ao processar o arquivo.",
         variant: "destructive"
       });
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -125,102 +136,37 @@ const CadastroCliente = () => {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <UserPlus className="w-5 h-5" />
-          Cadastro de Cliente
+          <Upload className="w-5 h-5" />
+          Cadastro de Clientes em Lote
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="nome">Nome *</Label>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="excel-file">Selecione o arquivo Excel</Label>
+            <div className="flex items-center gap-2 mt-1">
               <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) => handleInputChange("nome", e.target.value)}
-                placeholder="Nome completo"
-                required
+                id="excel-file"
+                type="file"
+                accept=".xlsx, .xls"
+                onChange={handleFileChange}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
               />
-            </div>
-            
-            <div>
-              <Label htmlFor="cpf">CPF *</Label>
-              <Input
-                id="cpf"
-                value={formData.cpf}
-                onChange={(e) => handleInputChange("cpf", e.target.value)}
-                placeholder="000.000.000-00"
-                maxLength={14}
-                required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-              <Input
-                id="dataNascimento"
-                type="date"
-                value={formData.dataNascimento}
-                onChange={(e) => handleInputChange("dataNascimento", e.target.value)}
-                required
-              />
-            </div>
-
-            {calculatedAge !== null && (
-                <div>
-                    <Label htmlFor="idade">Idade</Label>
-                    <Input
-                        id="idade"
-                        type="text"
-                        value={calculatedAge.toString()}
-                        placeholder="Idade"
-                        readOnly
-                        className="bg-muted"
-                    />
-                </div>
-            )}
-            
-            <div>
-              <Label htmlFor="telefone1">Telefone 1 *</Label>
-              <Input
-                id="telefone1"
-                value={formData.telefone1}
-                onChange={(e) => handleInputChange("telefone1", e.target.value)}
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-                required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="telefone2">Telefone 2</Label>
-              <Input
-                id="telefone2"
-                value={formData.telefone2}
-                onChange={(e) => handleInputChange("telefone2", e.target.value)}
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-              />
-            </div>
-            
-            <div className="md:col-span-2">
-              <Label htmlFor="wizebot">Wizebot</Label>
-              <Input
-                id="wizebot"
-                value={formData.wizebot}
-                onChange={(e) => handleInputChange("wizebot", e.target.value)}
-                placeholder="Informações do Wizebot"
-              />
+              <Button onClick={handleImport} disabled={loading || !file}>
+                {loading ? "Importando..." : "Importar"}
+                <FileInput className="ml-2 w-4 h-4" />
+              </Button>
             </div>
           </div>
-          
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Cadastrando..." : "Cadastrar Cliente"}
-          </Button>
-        </form>
+          {file && (
+            <p className="text-sm text-muted-foreground">
+              Arquivo selecionado: {file.name}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 };
 
-export default CadastroCliente;
+export default CadastroLote;

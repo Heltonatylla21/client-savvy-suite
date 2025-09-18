@@ -21,17 +21,66 @@ interface ClienteExcel {
   wizebot?: string;
 }
 
+// Função melhorada para processar datas no formato DD/MM/AAAA
+const parseDateString = (dateString: string): Date | null => {
+  if (!dateString) return null;
+  
+  const cleanDateString = String(dateString).trim();
+  
+  // Se a data contém '/', assume formato DD/MM/AAAA
+  if (cleanDateString.includes('/')) {
+    const parts = cleanDateString.split('/');
+    if (parts.length !== 3) return null;
+    
+    const dia = parseInt(parts[0], 10);
+    const mes = parseInt(parts[1], 10);
+    const ano = parseInt(parts[2], 10);
+    
+    // Validações básicas
+    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
+    if (dia < 1 || dia > 31) return null;
+    if (mes < 1 || mes > 12) return null;
+    if (ano < 1900 || ano > new Date().getFullYear()) return null;
+    
+    // Criar data usando o construtor com parâmetros específicos
+    // Nota: mes - 1 porque o construtor Date usa mês baseado em zero (0-11)
+    const date = new Date(ano, mes - 1, dia);
+    
+    // Verificar se a data criada corresponde aos valores fornecidos
+    // (isso detecta datas inválidas como 31/02/2023)
+    if (date.getFullYear() !== ano || 
+        date.getMonth() !== (mes - 1) || 
+        date.getDate() !== dia) {
+      return null;
+    }
+    
+    return date;
+  }
+  
+  // Tentar outros formatos
+  const date = new Date(cleanDateString);
+  return isNaN(date.getTime()) ? null : date;
+};
+
 // Função para calcular a idade a partir da data de nascimento
-const calculateAge = (birthDateString: string): number | null => {
-  if (!birthDateString) return null;
+const calculateAge = (birthDate: Date): number => {
   const today = new Date();
-  const birthDate = new Date(birthDateString);
   let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
+  
   return age;
+};
+
+// Função para formatar data para o formato ISO (YYYY-MM-DD)
+const formatDateToISO = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export default function CadastroLote() {
@@ -112,38 +161,39 @@ export default function CadastroLote() {
           if (!cpfLimpo || cpfLimpo.length !== 11 || !validateCPF(cpfLimpo)) {
             errors.push({
               row: rowNumber,
-              error: 'CPF inválido',
+              error: `CPF inválido: ${cpfString}`,
               data: row
             });
             continue;
           }
 
-          // Validar e corrigir a data de nascimento para o formato AAAA-MM-DD
-          let dataNascimento: Date;
-          const dataString = String(row.data_nascimento).trim();
-          
-          if (dataString.includes('/')) {
-            const [dia, mes, ano] = dataString.split('/');
-            dataNascimento = new Date(`${ano}-${mes}-${dia}`);
-          } else {
-            dataNascimento = new Date(dataString);
-          }
-          
-          if (isNaN(dataNascimento.getTime())) {
+          // Processar data de nascimento com a nova função
+          const dataNascimento = parseDateString(row.data_nascimento);
+          if (!dataNascimento) {
             errors.push({
               row: rowNumber,
-              error: 'Data de nascimento inválida',
+              error: `Data de nascimento inválida: ${row.data_nascimento}. Use o formato DD/MM/AAAA (ex: 21/12/1993)`,
               data: row
             });
             continue;
           }
 
-          // Calcular idade automaticamente a partir da data de nascimento
-          const calculatedAge = calculateAge(dataNascimento.toISOString().split('T')[0]);
-          if (calculatedAge === null || isNaN(calculatedAge)) {
-             errors.push({
+          // Validar se a data não é futura
+          if (dataNascimento > new Date()) {
+            errors.push({
               row: rowNumber,
-              error: 'Não foi possível calcular a idade a partir da data de nascimento.',
+              error: 'Data de nascimento não pode ser no futuro',
+              data: row
+            });
+            continue;
+          }
+
+          // Calcular idade
+          const calculatedAge = calculateAge(dataNascimento);
+          if (calculatedAge < 0 || calculatedAge > 150) {
+            errors.push({
+              row: rowNumber,
+              error: `Idade calculada inválida: ${calculatedAge} anos`,
               data: row
             });
             continue;
@@ -156,7 +206,7 @@ export default function CadastroLote() {
             idade: calculatedAge,
             telefone1: row.telefone1.toString().replace(/\D/g, ''),
             telefone2: row.telefone2 ? row.telefone2.toString().replace(/\D/g, '') : undefined,
-            data_nascimento: dataNascimento.toISOString().split('T')[0],
+            data_nascimento: formatDateToISO(dataNascimento),
             wizebot: row.wizebot ? row.wizebot.toString().trim() : undefined
           };
 
@@ -320,7 +370,7 @@ export default function CadastroLote() {
               <li><strong>nome:</strong> Nome completo do cliente</li>
               <li><strong>cpf:</strong> CPF (apenas números ou com formatação)</li>
               <li><strong>telefone1:</strong> Telefone principal</li>
-              <li><strong>data_nascimento:</strong> Data no formato DD/MM/AAAA (ex: 15/01/1990)</li>
+              <li><strong>data_nascimento:</strong> Data no formato DD/MM/AAAA (ex: 21/12/1993)</li>
             </ul>
             
             <p className="mt-4"><strong>Colunas opcionais:</strong></p>
@@ -328,7 +378,16 @@ export default function CadastroLote() {
               <li><strong>telefone2:</strong> Telefone secundário</li>
               <li><strong>wizebot:</strong> Informações do Wizebot</li>
             </ul>
-            <p className="mt-4"><strong>Observação:</strong> O campo "idade" não é obrigatório na planilha. Ele será calculado automaticamente com base na data de nascimento.</p>
+            
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p><strong>⚠️ Importante sobre datas:</strong></p>
+              <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                <li>Use sempre o formato <strong>DD/MM/AAAA</strong> (ex: 21/12/1993)</li>
+                <li>O campo "idade" será calculado automaticamente</li>
+                <li>Datas inválidas (como 31/02/2023) serão rejeitadas</li>
+                <li>Datas futuras não são permitidas</li>
+              </ul>
+            </div>
           </div>
         </CardContent>
       </Card>

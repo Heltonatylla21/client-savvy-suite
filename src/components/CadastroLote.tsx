@@ -74,7 +74,7 @@ const CadastroLote = () => {
         
         let dataNascimento;
         
-        // Validation
+        // Validação
         if (!nome || !cpf || !dataNascimentoExcel || !telefone1) {
           errors.push(`Registro inválido (dados incompletos): ${JSON.stringify(row)}`);
           continue;
@@ -88,10 +88,13 @@ const CadastroLote = () => {
         try {
           // Tenta converter a data de nascimento do formato DD/MM/AAAA para AAAA-MM-DD
           const [day, month, year] = dataNascimentoExcel.split('/');
-          dataNascimento = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
+             throw new Error('Formato incorreto');
+          }
+          dataNascimento = `${year}-${month}-${day}`;
           
           if (isNaN(new Date(dataNascimento).getTime())) {
-            throw new Error('Invalid Date');
+            throw new Error('Data inválida');
           }
         } catch {
           errors.push(`Data de nascimento inválida para o cliente ${nome}: ${dataNascimentoExcel}. Formato esperado: DD/MM/AAAA.`);
@@ -121,7 +124,12 @@ const CadastroLote = () => {
           .from('clientes')
           .insert(clientsToInsert);
 
-        if (error) throw error;
+        if (error) {
+          if (error.code === '23505') { // Código de erro para violação de chave única
+            throw new Error('Um ou mais CPFs já existem no sistema.');
+          }
+          throw error;
+        }
       }
       
       toast({

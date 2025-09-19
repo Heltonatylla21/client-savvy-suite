@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { validateCPF, formatCPF, formatPhone } from "@/lib/validators";
-import { UserPlus, Upload, FileInput } from "lucide-react";
+import { validateCPF } from "@/lib/validators";
+import { Upload, FileInput } from "lucide-react";
 import * as XLSX from 'xlsx';
 
 // Função para calcular a idade a partir da data de nascimento
@@ -21,6 +21,17 @@ const calculateAge = (birthDateString: string): number | null => {
   }
   return age;
 };
+
+// Interface para a estrutura dos dados do cliente
+interface Cliente {
+  nome: string;
+  cpf: string;
+  idade: number;
+  data_nascimento: string;
+  telefone1: string;
+  telefone2: string | null;
+  wizebot: string | null;
+}
 
 const CadastroLote = () => {
   const { toast } = useToast();
@@ -43,6 +54,8 @@ const CadastroLote = () => {
     }
 
     setLoading(true);
+    const clientsToInsert: Cliente[] = [];
+    const errors: string[] = [];
 
     try {
       const data = await file.arrayBuffer();
@@ -51,16 +64,15 @@ const CadastroLote = () => {
       const worksheet = workbook.Sheets[sheetName];
       const json = XLSX.utils.sheet_to_json(worksheet);
 
-      const clientsToInsert = [];
-      const errors = [];
-
       for (const row of json) {
-        const nome = row.Nome;
-        const cpf = row.CPF?.toString().replace(/\D/g, '');
-        const dataNascimentoExcel = row["Data de Nascimento"]?.toString();
-        const telefone1 = row["Telefone 1"]?.toString().replace(/\D/g, '');
-        const telefone2 = row["Telefone 2"]?.toString().replace(/\D/g, '') || null;
-        const wizebot = row.Wizebot || null;
+        const nome = (row.Nome || '').toString().trim();
+        const cpf = (row.CPF || '').toString().replace(/\D/g, '').trim();
+        const dataNascimentoExcel = (row["Data de Nascimento"] || '').toString().trim();
+        const telefone1 = (row["Telefone 1"] || '').toString().replace(/\D/g, '').trim();
+        const telefone2 = (row["Telefone 2"] || '').toString().replace(/\D/g, '').trim() || null;
+        const wizebot = (row.Wizebot || '').toString().trim() || null;
+        
+        let dataNascimento;
         
         // Validation
         if (!nome || !cpf || !dataNascimentoExcel || !telefone1) {
@@ -69,16 +81,20 @@ const CadastroLote = () => {
         }
 
         if (!validateCPF(cpf)) {
-          errors.push(`CPF inválido: ${cpf}`);
+          errors.push(`CPF inválido para o cliente ${nome}: ${cpf}`);
           continue;
         }
         
-        let dataNascimento;
         try {
+          // Tenta converter a data de nascimento do formato DD/MM/AAAA para AAAA-MM-DD
           const [day, month, year] = dataNascimentoExcel.split('/');
           dataNascimento = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          
+          if (isNaN(new Date(dataNascimento).getTime())) {
+            throw new Error('Invalid Date');
+          }
         } catch {
-          errors.push(`Data de nascimento inválida: ${dataNascimentoExcel}`);
+          errors.push(`Data de nascimento inválida para o cliente ${nome}: ${dataNascimentoExcel}. Formato esperado: DD/MM/AAAA.`);
           continue;
         }
 
@@ -110,10 +126,15 @@ const CadastroLote = () => {
       
       toast({
         title: "Importação concluída",
-        description: `Foram cadastrados ${clientsToInsert.length} clientes. ${errors.length > 0 ? `Com ${errors.length} erros.` : ''}`,
+        description: `Foram cadastrados ${clientsToInsert.length} clientes com sucesso.`,
       });
 
       if (errors.length > 0) {
+        toast({
+          title: "Erros na importação",
+          description: `Foram encontrados ${errors.length} erros. Verifique o console para mais detalhes.`,
+          variant: "destructive",
+        });
         console.error("Erros de importação:", errors);
       }
 

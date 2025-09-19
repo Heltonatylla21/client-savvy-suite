@@ -74,9 +74,9 @@ const CadastroLote = () => {
         
         let dataNascimento;
         
-        // Validação dos dados
+        // Validação
         if (!nome || !cpf || !dataNascimentoExcel || !telefone1) {
-          errors.push(`Registro inválido (dados incompletos) na linha: ${JSON.stringify(row)}`);
+          errors.push(`Registro inválido (dados incompletos): ${JSON.stringify(row)}`);
           continue;
         }
 
@@ -85,8 +85,8 @@ const CadastroLote = () => {
           continue;
         }
         
-        // Validação e conversão da data de nascimento
         try {
+          // Tenta converter a data de nascimento do formato DD/MM/AAAA para AAAA-MM-DD
           const [day, month, year] = dataNascimentoExcel.split('/');
           if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
              throw new Error('Formato incorreto');
@@ -125,32 +125,24 @@ const CadastroLote = () => {
           .insert(clientsToInsert);
 
         if (error) {
-          if (error.code === '23505') { // Código de erro para violação de chave única (duplicidade)
-            throw new Error('Um ou mais CPFs já existem no sistema. Verifique a planilha e tente novamente.');
+          if (error.code === '23505') { // Código de erro para violação de chave única
+            throw new Error('Um ou mais CPFs já existem no sistema.');
           }
           throw error;
         }
       }
       
-      const successMessage = `Foram cadastrados ${clientsToInsert.length} clientes com sucesso.`;
-      const errorMessage = errors.length > 0 ? `Foram encontrados ${errors.length} erros. Verifique o console para mais detalhes.` : null;
+      toast({
+        title: "Importação concluída",
+        description: `Foram cadastrados ${clientsToInsert.length} clientes com sucesso.`,
+      });
 
-      if (clientsToInsert.length > 0) {
-        toast({
-          title: "Importação concluída",
-          description: successMessage,
-        });
-      }
-
-      if (errorMessage) {
+      if (errors.length > 0) {
         toast({
           title: "Erros na importação",
-          description: errorMessage,
+          description: `Foram encontrados ${errors.length} erros. Verifique o console para mais detalhes.`,
           variant: "destructive",
         });
-      }
-      
-      if (errors.length > 0) {
         console.error("Erros de importação:", errors);
       }
 

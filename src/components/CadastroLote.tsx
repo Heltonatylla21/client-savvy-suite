@@ -1,37 +1,45 @@
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Upload className="w-5 h-5" />
-          Cadastro de Clientes em Lote
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="excel-file">Selecione o arquivo Excel</Label>
-            <div className="flex items-center gap-2 mt-1">
-              <Input
-                id="excel-file"
-                type="file"
-                accept=".xlsx, .xls"
-                onChange={handleFileChange}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-              />
-              <Button onClick={handleImport} disabled={loading || !file}>
-                {loading ? "Importando..." : "Importar"}
-                <FileInput className="ml-2 w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-          {file && (
-            <p className="text-sm text-muted-foreground">
-              Arquivo selecionado: {file.name}
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-export default CadastroLote;
+Activate E2E Encryption
+
+New
+
+Share
+
+
+
+
+New Chat
+140 lines
+
+import React, { useState } from 'react';
+import * as XLSX from 'xlsx';
+import { supabase } from '../integrations/supabase/client';
+interface Cliente {
+  nome: string;
+  email: string;
+  telefone: string;
+}
+export function CadastroLote() {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(false);
+  // Modelo de dados para o Excel (cabeçalho + exemplo)
+  const modeloExcel = [
+    ['nome', 'email', 'telefone'],
+    ['João Silva', 'joao@email.com', '11999999999'],
+    ['Maria Souza', 'maria@email.com', '11988888888'],
+  ];
+  // Gera e baixa o arquivo modelo Excel
+  const baixarModelo = () => {
+    const ws = XLSX.utils.aoa_to_sheet(modeloExcel);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ModeloClientes');
+    XLSX.writeFile(wb, 'modelo_cadastro_clientes.xlsx');
+  };
+  // Validação simples dos dados do cliente
+  const validarCliente = (cliente: Cliente) => {
+    if (!cliente.nome || !cliente.email) return false;
+    // Pode adicionar regex para email, telefone, etc.
+    return true;
+  };
+  // Upload e processamento do arquivo Excel
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];

@@ -1,15 +1,3 @@
-Activate E2E Encryption
-
-New
-
-Share
-
-
-
-
-New Chat
-140 lines
-
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../integrations/supabase/client';
@@ -43,3 +31,37 @@ export function CadastroLote() {
   // Upload e processamento do arquivo Excel
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+      return (
+    <div className="p-4 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Cadastro em Lote</h1>
+      <button
+        onClick={baixarModelo}
+        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        disabled={loading}
+      >
+        Baixar Modelo Excel
+      </button>
+      <input
+        type="file"
+        accept=".xlsx, .xls"
+        onChange={handleUpload}
+        disabled={loading}
+        className="mb-4"
+      />
+      {loading && <p>Processando arquivo...</p>}
+      {clientes.length > 0 && (
+        <>
+          <h2 className="text-xl font-semibold mb-2">Clientes Importados:</h2>
+          <ul className="list-disc pl-5">
+            {clientes.map((cliente, i) => (
+              <li key={i}>
+                {cliente.nome} - {cliente.email} - {cliente.telefone}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
